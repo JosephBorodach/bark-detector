@@ -1,0 +1,47 @@
+[project]
+name = "bark-detector-module"
+version = "0.0.0"
+description = "YAMNet-based dog bark detector for Viam. Streams audio_in and emits bark events."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Joseph Borodach" }]
+dependencies = [
+    "viam-sdk>=0.30",
+    "numpy>=1.26",
+]
+
+[project.optional-dependencies]
+# tflite-runtime is the actual inference backend on the Pi. It's an
+# optional extra so pip resolve doesn't fail on dev machines where the
+# runtime doesn't publish a wheel; run.sh installs '.[runtime]' on the
+# Pi. Tests use a stub classifier and don't need any inference backend.
+runtime = ["tflite-runtime>=2.14"]
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.16,<0.17",
+    "black>=26,<27",
+]
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "B", "SIM"]
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

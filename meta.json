@@ -1,0 +1,15 @@
+{
+    "module_id": "joseph:bark-detector",
+    "visibility": "public",
+    "url": "https://github.com/JosephBorodach/bark-detector",
+    "description": "Detects dog barks from an audio_in component using YAMNet. Publishes bark_detected events to a queue sensor for tabular capture and dashboards.",
+    "models": [
+        {
+            "api": "rdk:component:sensor",
+            "model": "joseph:bark-detector:sensor",
+            "markdown_link": "README.md#detector"
+        }
+    ],
+    "entrypoint": "run.sh",
+    "first_run": ""
+}
