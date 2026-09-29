@@ -81,14 +81,29 @@ class YAMNetClassifier:
     """
 
     def __init__(self, model_path: Path):
-        # Deferred import: tflite-runtime isn't available on macOS dev
-        # machines without extra setup. This lets the test suite import
-        # the module without requiring TFLite at collection time.
-        try:
-            from tflite_runtime.interpreter import Interpreter  # type: ignore
-        except ImportError:
-            from tensorflow.lite.python.interpreter import Interpreter  # type: ignore
-        self._interp = Interpreter(model_path=str(model_path))
+        # Deferred import so tests can construct the module without a
+        # TFLite backend installed. Try ai-edge-litert first (Google's
+        # actively maintained TFLite package, supports newer Python
+        # versions), then fall back to tflite-runtime, then full
+        # tensorflow.
+        interpreter_cls = None
+        for mod_path in (
+            "ai_edge_litert.interpreter",
+            "tflite_runtime.interpreter",
+            "tensorflow.lite.python.interpreter",
+        ):
+            try:
+                module = __import__(mod_path, fromlist=["Interpreter"])
+                interpreter_cls = module.Interpreter
+                break
+            except ImportError:
+                continue
+        if interpreter_cls is None:
+            raise RuntimeError(
+                "No TFLite backend available. Install one of: "
+                "ai-edge-litert, tflite-runtime, or tensorflow."
+            )
+        self._interp = interpreter_cls(model_path=str(model_path))
         self._interp.allocate_tensors()
         self._in_idx = self._interp.get_input_details()[0]["index"]
         # YAMNet returns three tensors: scores (521,), embeddings, log-mel.

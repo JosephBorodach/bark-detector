@@ -12,11 +12,12 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# tflite-runtime is the actual inference backend on the Pi. It's an
-# optional extra so pip resolve doesn't fail on dev machines where the
-# runtime doesn't publish a wheel; run.sh installs '.[runtime]' on the
-# Pi. Tests use a stub classifier and don't need any inference backend.
-runtime = ["tflite-runtime>=2.14"]
+# ai-edge-litert is Google's actively maintained successor to
+# tflite-runtime. tflite-runtime stopped publishing wheels for newer
+# Python versions (>=3.13). Kept as an optional extra so pip resolve
+# doesn't fail on dev machines that lack a wheel — tests use a stub
+# classifier and don't need any inference backend.
+runtime = ["ai-edge-litert>=1.0"]
 dev = [
     "pytest>=8",
     "pytest-asyncio>=0.23",
