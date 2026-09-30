@@ -5,6 +5,7 @@ import asyncio
 import contextlib
 import logging
 import time
+from collections import deque
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from typing import Any, ClassVar
@@ -31,6 +32,7 @@ LOGGER = logging.getLogger(__name__)
 DEFAULT_THRESHOLD = 0.5
 DEFAULT_DEBOUNCE_SEC = 2.0
 DEFAULT_CODEC = "pcm16"
+BARK_HISTORY_MAX = 500
 
 # PCM16 is signed int16, so the divisor to normalize into [-1, 1] is 2**15.
 PCM16_SCALE = float(1 << 15)
@@ -67,6 +69,10 @@ class Detector(Sensor):
         self._last_dog_score: float = 0.0
         self._last_class_scores: dict[str, float] = {}
         self._bark_count_session: int = 0
+        # In-memory bark log for the chart. Cloud tabular-data isn't
+        # reachable from the webapp's cookie-scoped API key, so the
+        # dashboard reads history via get_history do_command instead.
+        self._bark_history: deque[dict] = deque(maxlen=BARK_HISTORY_MAX)
         self._last_debounce_ts: float = 0.0
 
     # -- Viam lifecycle ------------------------------------------------
@@ -212,19 +218,27 @@ class Detector(Sensor):
             return
         self._last_debounce_ts = now
         self._bark_count_session += 1
-        self._last_bark_at = _now_iso()
+        at = _now_iso()
+        self._last_bark_at = at
+        top_class = max(per_class.items(), key=lambda kv: kv[1])[0]
+        self._bark_history.append(
+            {"at": at, "score": float(score), "top_class": top_class}
+        )
         # Fire-and-forget the event push; get_readings picks up the
         # rolling state either way.
-        asyncio.get_event_loop().create_task(self._push_bark_event(score, per_class))
+        asyncio.get_event_loop().create_task(
+            self._push_bark_event(at, score, top_class, per_class)
+        )
 
-    async def _push_bark_event(self, score: float, per_class: dict[str, float]) -> None:
+    async def _push_bark_event(
+        self, at: str, score: float, top_class: str, per_class: dict[str, float]
+    ) -> None:
         if self._events_sensor is None:
             return
-        top_class = max(per_class.items(), key=lambda kv: kv[1])[0]
         event = {
             "event_type": "bark_detected",
             "source": self.name,
-            "at": _now_iso(),
+            "at": at,
             "score": float(score),
             "top_class": top_class,
             "class_scores": per_class,
@@ -249,6 +263,18 @@ class Detector(Sensor):
             "debounce_sec": self._debounce_sec,
             "class_scores": dict(self._last_class_scores),
         }
+
+    async def do_command(
+        self,
+        command: Mapping[str, Any],
+        *,
+        timeout: float | None = None,
+        **kwargs: Any,
+    ) -> Mapping[str, Any]:
+        verb = command.get("command")
+        if verb == "get_history":
+            return {"history": list(self._bark_history)}
+        raise ValueError(f"unknown command: {verb!r}")
 
 
 def _pcm16_to_float32(data: bytes, channels: int) -> np.ndarray:
