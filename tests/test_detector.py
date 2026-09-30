@@ -177,6 +177,36 @@ async def test_get_readings_empty_before_any_classification(tmp_path):
     assert r["last_dog_score"] == 0.0
 
 
+# -- get_history do_command ------------------------------------------
+
+
+async def test_get_history_returns_empty_before_any_barks(tmp_path):
+    d, _ = _make(tmp_path)
+    r = await d.do_command({"command": "get_history"})
+    assert r == {"history": []}
+
+
+async def test_get_history_records_each_bark(tmp_path):
+    d, _ = _make(tmp_path)
+    d._classifier = StubClassifier(_scores_with_bark(0.9))
+    d._classify_and_emit(np.zeros(YAMNET_WINDOW_SAMPLES, dtype=np.float32))
+    # Bump the debounce clock so a second bark isn't collapsed.
+    d._last_debounce_ts -= 10
+    d._classify_and_emit(np.zeros(YAMNET_WINDOW_SAMPLES, dtype=np.float32))
+    r = await d.do_command({"command": "get_history"})
+    assert len(r["history"]) == 2
+    for entry in r["history"]:
+        assert entry["at"]
+        assert entry["score"] == pytest.approx(0.9)
+        assert entry["top_class"] == "Bark"
+
+
+async def test_do_command_rejects_unknown_verb(tmp_path):
+    d, _ = _make(tmp_path)
+    with pytest.raises(ValueError, match="unknown command"):
+        await d.do_command({"command": "nope"})
+
+
 # -- audio helpers ---------------------------------------------------
 
 
