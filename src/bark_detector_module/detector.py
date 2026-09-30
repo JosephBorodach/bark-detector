@@ -69,9 +69,7 @@ class Detector(Sensor):
         self._last_dog_score: float = 0.0
         self._last_class_scores: dict[str, float] = {}
         self._bark_count_session: int = 0
-        # In-memory bark log for the chart. Cloud tabular-data isn't
-        # reachable from the webapp's cookie-scoped API key, so the
-        # dashboard reads history via get_history do_command instead.
+        # Cloud tabular data isn't readable from the webapp's cookie-scoped API key.
         self._bark_history: deque[dict] = deque(maxlen=BARK_HISTORY_MAX)
         self._last_debounce_ts: float = 0.0
 
