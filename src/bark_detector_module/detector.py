@@ -64,6 +64,7 @@ class Detector(Sensor):
         self._debounce_sec: float = DEFAULT_DEBOUNCE_SEC
         self._classifier: YAMNetClassifier | None = None
         self._run_task: asyncio.Task | None = None
+        self._main_loop: asyncio.AbstractEventLoop | None = None
         # Rolling telemetry surfaced via get_readings.
         self._last_bark_at: str | None = None
         self._last_dog_score: float = 0.0
@@ -166,6 +167,7 @@ class Detector(Sensor):
 
     async def _run_loop(self) -> None:
         assert self._audio_in is not None
+        self._main_loop = asyncio.get_running_loop()
         try:
             props = await self._audio_in.get_properties()
         except Exception as e:
@@ -222,11 +224,14 @@ class Detector(Sensor):
         self._bark_history.append(
             {"at": at, "score": float(score), "top_class": top_class}
         )
-        # Fire-and-forget the event push; get_readings picks up the
-        # rolling state either way.
-        asyncio.get_event_loop().create_task(
-            self._push_bark_event(at, score, top_class, per_class)
-        )
+        # Fire-and-forget the event push from this worker thread. Must
+        # hop back to the main loop — asyncio.get_event_loop() blows up
+        # on 3.12+ when there's no running loop in the current thread.
+        if self._main_loop is not None:
+            asyncio.run_coroutine_threadsafe(
+                self._push_bark_event(at, score, top_class, per_class),
+                self._main_loop,
+            )
 
     async def _push_bark_event(
         self, at: str, score: float, top_class: str, per_class: dict[str, float]
