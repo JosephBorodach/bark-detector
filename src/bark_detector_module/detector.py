@@ -224,14 +224,20 @@ class Detector(Sensor):
         self._bark_history.append(
             {"at": at, "score": float(score), "top_class": top_class}
         )
-        # Fire-and-forget the event push from this worker thread. Must
-        # hop back to the main loop — asyncio.get_event_loop() blows up
-        # on 3.12+ when there's no running loop in the current thread.
-        if self._main_loop is not None:
-            asyncio.run_coroutine_threadsafe(
-                self._push_bark_event(at, score, top_class, per_class),
-                self._main_loop,
-            )
+        # Fire-and-forget the event push. In production we're on a
+        # worker thread (asyncio.to_thread) and must hop back to the
+        # main loop captured in _run_loop. In tests _run_loop isn't
+        # called, so fall back to the currently-running loop if any.
+        loop = self._main_loop
+        if loop is None:
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                return
+        asyncio.run_coroutine_threadsafe(
+            self._push_bark_event(at, score, top_class, per_class),
+            loop,
+        )
 
     async def _push_bark_event(
         self, at: str, score: float, top_class: str, per_class: dict[str, float]
